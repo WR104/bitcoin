@@ -1,4 +1,5 @@
 use crate::block::Block;
+use rocksdb::{DB, Options};
 
 pub struct Blockchain {
     pub blocks: Vec<Block>
