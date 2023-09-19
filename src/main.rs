@@ -1,20 +1,16 @@
-pub mod block;
-pub mod blockchain;
-pub mod proofofwork;
-pub mod utils;
+mod block;
+mod blockchain;
+mod proofofwork;
+mod utils;
+mod bcdb;
+mod cli;
 
 use blockchain::Blockchain;
-use proofofwork::ProofOfWork;
+use cli::CLI;
 
 fn main() {
-    let mut blockchain = Blockchain::new();
-    blockchain.add_block("Send 1 BTC to Alice");
-    blockchain.add_block("Send 2 BTC to Bob");
-    blockchain.print_block(); 
+    let blockchian = Blockchain::new();
 
-    for block in &blockchain.blocks {
-        let pow = ProofOfWork::new(block);
-        println!("Pow: {}", pow.validate());
-        println!();
-    }
+    let mut cli = CLI::new(blockchian);
+    cli.run();
 }

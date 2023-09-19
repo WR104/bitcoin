@@ -1,6 +1,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 use crate::{utils, proofofwork::ProofOfWork};
+use serde::{Serialize, Deserialize};
+use bincode;
 
+#[derive(Serialize, Deserialize)]
 pub struct Block {
     pub time_stamp: i64,
     pub data: Vec<u8>,
@@ -37,5 +40,13 @@ impl Block {
         println!("Data: {}", String::from_utf8_lossy(&self.data));
         println!("Previous Bloch Hash: {}", utils::hex_string(&self.prev_block_hash));
         println!("Hash {}", utils::hex_string(&self.hash));
+    }
+
+    pub fn serialize(&self) -> Vec<u8> {
+        bincode::serialize(self).expect("Failed to serialize block")
+    }
+
+    pub fn deserialize(data: &[u8]) -> Result<Self, bincode::Error> {
+        bincode::deserialize(data)
     }
 }

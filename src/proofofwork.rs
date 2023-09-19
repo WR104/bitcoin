@@ -72,7 +72,7 @@ mod tests {
     fn test() {
         let bytes: &[u8] = &[0x78, 0x56, 0x12, 0x44];
         println!("len value: {}", bytes.len());
-        println!("byte val: {}", bytes);
+        println!("byte val: {:?}", bytes);
 
         let last_four = &bytes[bytes.len() - 4 ..];
         println!("{:?}", last_four);
