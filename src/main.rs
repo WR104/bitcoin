@@ -6,12 +6,9 @@ mod bcdb;
 mod cli;
 mod transaction;
 
-use blockchain::Blockchain;
 use cli::CLI;
 
 fn main() {
-    let blockchian = Blockchain::new();
-
-    let mut cli = CLI::new(blockchian);
+    let cli = CLI;
     cli.run();
 }

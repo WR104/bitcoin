@@ -15,7 +15,7 @@ pub struct TXInput {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-pub struct TXOuput {
+pub struct TXOutput {
     pub value: i32,
     pub script_pub_key: String,
 }
@@ -24,7 +24,7 @@ pub struct TXOuput {
 pub struct Transaction {
     pub id: Vec<u8>,
     pub vin: Vec<TXInput>,
-    pub vout: Vec<TXOuput>,
+    pub vout: Vec<TXOutput>,
 }
 
 impl TXInput {
@@ -33,7 +33,7 @@ impl TXInput {
     }
 }
 
-impl TXOuput {
+impl TXOutput {
     pub fn can_be_unlocked_with(&self, unlocking_data: &str) -> bool {
         self.script_pub_key == unlocking_data
     }
@@ -76,7 +76,7 @@ pub fn new_coinbase_tx(to: &str, data: &str) -> Transaction {
             vout: -1,
             script_sig: input_data,
         }],
-        vout: vec![TXOuput {
+        vout: vec![TXOutput {
             value: SUBSIDY,
             script_pub_key: to.to_string(),
         }],
@@ -110,13 +110,13 @@ pub fn new_utxo_transaction(from: &str, to: &str, amount: i32, bc: &Blockchain) 
     }
 
     // transfer utxo to the "to" address
-    tsx_outputs.push(TXOuput {
+    tsx_outputs.push(TXOutput {
         value: amount,
         script_pub_key: to.to_string(),
     });
 
     if acc > amount {
-        tsx_outputs.push(TXOuput {
+        tsx_outputs.push(TXOutput {
             value: acc - amount,
             script_pub_key: from.to_string(),
         });

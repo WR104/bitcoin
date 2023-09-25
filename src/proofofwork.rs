@@ -1,13 +1,13 @@
-use crate::{block::Block, utils};
+use crate::block::Block;
 use num_bigint::BigUint;
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 
 const TARGET_BITS: u16 = 16;
 const MAT_NONCE: u32 = u32::MAX;
 
 pub struct ProofOfWork<'a> {
     block: &'a Block,
-    target: BigUint
+    target: BigUint,
 }
 
 impl<'a> ProofOfWork<'a> {
@@ -20,38 +20,36 @@ impl<'a> ProofOfWork<'a> {
     fn prepare_data(&self, nonce: u32) -> Vec<u8> {
         let data = vec![
             &self.block.time_stamp.to_le_bytes()[..],
-            &self.block.data[..],
+            &self.block.hash_transaction(),
             &self.block.prev_block_hash[..],
             &TARGET_BITS.to_le_bytes(),
             &nonce.to_be_bytes(),
-        ].concat();
+        ]
+        .concat();
         data
     }
 
+    /// Calculates the proof of work, returning the correct nonce and hash.
+    ///
+    /// # Returns
+    ///
+    /// * A tuple containing the correct nonce and the resulting hash as a `Vec<u8>`.
     pub fn run(&self) -> (u32, Vec<u8>) {
-        let mut nonce: u32 = 0;
-        let mut hash: Vec<u8> = Vec::new();
         let mut hasher = Sha256::new();
 
-        println!("Mining the block containing {}", utils::hex_string(&self.block.data));
-        while nonce < MAT_NONCE {
-            hash.clear();
-
-            let data: Vec<u8> = self.prepare_data(nonce);
-            hasher.update(data);
-            hash = hasher.finalize_reset().to_vec();
+        for nonce in 0..MAT_NONCE {
+            let data = self.prepare_data(nonce);
+            hasher.update(&data);
+            let hash = hasher.finalize_reset().to_vec();
 
             let hash_int = BigUint::from_bytes_be(&hash);
 
             if hash_int < self.target {
-                println!("{}", nonce);
-                break;
-            } else {
-                nonce += 1;
+                return (nonce, hash);
             }
         }
-        println!();
-        (nonce, hash)
+
+        (0, Vec::new()) // Return a default value if no solution is found within MAT_NONCE
     }
 
     pub fn validate(&self) -> bool {
@@ -65,7 +63,6 @@ impl<'a> ProofOfWork<'a> {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     #[test]
@@ -74,7 +71,7 @@ mod tests {
         println!("len value: {}", bytes.len());
         println!("byte val: {:?}", bytes);
 
-        let last_four = &bytes[bytes.len() - 4 ..];
+        let last_four = &bytes[bytes.len() - 4..];
         println!("{:?}", last_four);
     }
 }

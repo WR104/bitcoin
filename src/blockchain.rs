@@ -4,7 +4,7 @@ use crate::{
     bcdb::BlockchainDb,
     block::Block,
     proofofwork::ProofOfWork,
-    transaction::{new_coinbase_tx, Transaction},
+    transaction::{new_coinbase_tx, TXOutput, Transaction},
     utils,
 };
 
@@ -37,6 +37,62 @@ impl Blockchain {
         };
 
         Blockchain { tip, db }
+    }
+
+    pub fn mine_block(&mut self, transactions: Vec<Transaction>) {
+        // Attempt to read the last hash
+        let last_hash = match BlockchainDb::read(&self.db, b"l") {
+            Ok(Some(hash)) => hash,
+            Ok(None) => {
+                eprintln!("Error: Last hash not found in the database");
+                return;
+            }
+            Err(_) => {
+                eprintln!("Error: Failed to read from the database");
+                return;
+            }
+        };
+
+        // Attempt to read the last block's serialized data
+        let last_block_serialize = match BlockchainDb::read(&self.db, &last_hash) {
+            Ok(Some(data)) => data,
+            Ok(None) => {
+                eprintln!("Error: Last block data not found in the database");
+                return;
+            }
+            Err(_) => {
+                eprintln!("Error: Failed to read last block data from the database");
+                return;
+            }
+        };
+
+        // Attempt to deserialize the last block
+        let last_block = match Block::deserialize(&last_block_serialize) {
+            Ok(block) => block,
+            Err(_) => {
+                eprintln!("Error: Failed to deserialize the last block");
+                return;
+            }
+        };
+
+        let pow = ProofOfWork::new(&last_block);
+        if !pow.validate() {
+            eprintln!("Error: PoW validation failed. Cannot add new block to blockchain");
+            return;
+        }
+
+        let new_block = Block::new(transactions, last_hash);
+        if let Err(_) = BlockchainDb::write(&mut self.db, &new_block.hash, &new_block.serialize()) {
+            eprintln!("Error: Failed to write new block to the database");
+            return;
+        }
+
+        if let Err(_) = BlockchainDb::write(&mut self.db, b"l", &new_block.hash) {
+            eprintln!("Error: Failed to update last hash in the database");
+            return;
+        }
+
+        self.tip = new_block.hash;
     }
 
     pub fn find_unspent_transactions(&self, address: &str) -> Vec<Transaction> {
@@ -78,16 +134,24 @@ impl Blockchain {
         unspent_txs
     }
 
+    pub fn find_utxo(&self, address: &str) -> Vec<TXOutput> {
+        self.find_unspent_transactions(address)
+            .into_iter()
+            .flat_map(|tx| tx.vout.into_iter())
+            .filter(|out| out.can_be_unlocked_with(address))
+            .collect()
+    }
+
     /// Finds all unspent outputs for the given address and ensures they store enough value.
-///
-/// # Arguments
-///
-/// * `address` - The address to find unspent outputs for.
-/// * `amount` - The minimum amount of value to find.
-///
-/// # Returns
-///
-/// * A tuple containing the accumulated value and a map of transaction IDs to their unspent output indices.
+    ///
+    /// # Arguments
+    ///
+    /// * `address` - The address to find unspent outputs for.
+    /// * `amount` - The minimum amount of value to find.
+    ///
+    /// # Returns
+    ///
+    /// * A tuple containing the accumulated value and a map of transaction IDs to their unspent output indices.
     pub fn find_spendable_outputs(
         &self,
         address: &str,
