@@ -4,6 +4,7 @@ mod proofofwork;
 mod utils;
 mod bcdb;
 mod cli;
+mod transaction;
 
 use blockchain::Blockchain;
 use cli::CLI;
