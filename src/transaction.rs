@@ -1,5 +1,6 @@
 use crate::utils;
 use serde::{Deserialize, Serialize};
+use core::fmt;
 use std::process;
 
 use crate::blockchain::Blockchain;
@@ -7,7 +8,7 @@ use crate::blockchain::Blockchain;
 // mining reward
 pub const SUBSIDY: i32 = 10;
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TXInput {
     pub txid: Vec<u8>,
     pub vout: i32,
@@ -36,6 +37,25 @@ impl TXInput {
 impl TXOutput {
     pub fn can_be_unlocked_with(&self, unlocking_data: &str) -> bool {
         self.script_pub_key == unlocking_data
+    }
+}
+
+impl fmt::Debug for TXOutput {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("TXOutput")
+            .field("value", &self.value)
+            .field("script_pub_key", &self.script_pub_key)
+            .finish()
+    }
+}
+
+impl fmt::Debug for Transaction {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("Transaction")
+            .field("id", &self.id)
+            .field("vin", &self.vin)
+            .field("vout", &self.vout)
+            .finish()
     }
 }
 

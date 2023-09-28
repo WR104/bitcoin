@@ -29,6 +29,7 @@ impl Block {
         let (nonce, hash) = pow.run();
         block.nonce = nonce;
         block.hash = hash;
+        println!("hash: {}", utils::hex_string(&block.hash));
         block
     }
 
@@ -55,11 +56,9 @@ impl Block {
 
     pub fn print_content(&self) {
         println!("Timestamp: {}", self.time_stamp);
-        //println!("Data: {}", String::from_utf8_lossy(&self.data));
-        println!(
-            "Previous Bloch Hash: {}",
-            utils::hex_string(&self.prev_block_hash)
-        );
+        // todo!("rewrite data");
+        // println!("Data: {}", String::from_utf8_lossy(&self.data));
+        println!("Previous Block Hash: {}", utils::hex_string(&self.prev_block_hash));
         println!("Hash {}", utils::hex_string(&self.hash));
     }
 

@@ -71,6 +71,6 @@ impl CLI {
 
     fn print_chain(&self) {
         let bc = Blockchain::new("");
-        bc.print_block();
+        bc.print_blocks();
     }
 }

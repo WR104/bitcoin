@@ -14,8 +14,8 @@ const GENESIS_COINBASE_DATA: &str =
 
 pub struct Blockchain {
     // last block hsh
-    tip: Vec<u8>,
-    db: BlockchainDb,
+    pub tip: Vec<u8>,
+    pub db: BlockchainDb,
 }
 
 impl Blockchain {
@@ -40,60 +40,31 @@ impl Blockchain {
     }
 
     pub fn mine_block(&mut self, transactions: Vec<Transaction>) {
-        // Attempt to read the last hash
-        let last_hash = match BlockchainDb::read(&self.db, b"l") {
-            Ok(Some(hash)) => hash,
-            Ok(None) => {
-                eprintln!("Error: Last hash not found in the database");
-                return;
-            }
-            Err(_) => {
-                eprintln!("Error: Failed to read from the database");
-                return;
-            }
+        let last_hash = match self.db.read(b"1").unwrap() {
+            Some(hash) => hash,
+            None => panic!("No last hash found in the database"),
         };
-
-        // Attempt to read the last block's serialized data
-        let last_block_serialize = match BlockchainDb::read(&self.db, &last_hash) {
-            Ok(Some(data)) => data,
-            Ok(None) => {
-                eprintln!("Error: Last block data not found in the database");
-                return;
-            }
-            Err(_) => {
-                eprintln!("Error: Failed to read last block data from the database");
-                return;
-            }
-        };
-
-        // Attempt to deserialize the last block
-        let last_block = match Block::deserialize(&last_block_serialize) {
-            Ok(block) => block,
-            Err(_) => {
-                eprintln!("Error: Failed to deserialize the last block");
-                return;
-            }
-        };
-
+    
+        let last_block_serialized = self.db.read(&last_hash).unwrap().expect("Failed to read last block");
+        let last_block = Block::deserialize(&last_block_serialized).expect("Failed to deserialize last block");
+    
         let pow = ProofOfWork::new(&last_block);
-        if !pow.validate() {
-            eprintln!("Error: PoW validation failed. Cannot add new block to blockchain");
-            return;
+    
+        if pow.validate() {
+            let new_block = Block::new(transactions, last_hash);
+    
+            self.db.write(&new_block.hash, &new_block.serialize())
+                .expect("Failed to write new block to the database");
+    
+            self.db.write(b"1", &new_block.hash)
+                .expect("Failed to update the tip in the database");
+    
+            self.tip = new_block.hash;
+        } else {
+            panic!("Failed to validate proof of work");
         }
-
-        let new_block = Block::new(transactions, last_hash);
-        if let Err(_) = BlockchainDb::write(&mut self.db, &new_block.hash, &new_block.serialize()) {
-            eprintln!("Error: Failed to write new block to the database");
-            return;
-        }
-
-        if let Err(_) = BlockchainDb::write(&mut self.db, b"l", &new_block.hash) {
-            eprintln!("Error: Failed to update last hash in the database");
-            return;
-        }
-
-        self.tip = new_block.hash;
     }
+       
 
     pub fn find_unspent_transactions(&self, address: &str) -> Vec<Transaction> {
         let mut unspent_txs: Vec<Transaction> = Vec::new();
@@ -209,7 +180,7 @@ impl Blockchain {
         })
     }
 
-    pub fn print_block(&self) {
+    pub fn print_blocks(&self) {
         let mut blockchain_iterator = BlockchainIterator {
             prev_block_hash: self.tip.clone(),
             db: &self.db,
@@ -217,18 +188,18 @@ impl Blockchain {
 
         while let Some(block) = blockchain_iterator.next() {
             block.print_content();
-            println!("-------------");
+            println!();
         }
     }
 }
 
-struct BlockchainIterator<'a> {
+pub struct BlockchainIterator<'a> {
     prev_block_hash: Vec<u8>,
     db: &'a BlockchainDb,
 }
 
 impl<'a> BlockchainIterator<'a> {
-    fn next(&mut self) -> Option<Block> {
+    pub fn next(&mut self) -> Option<Block> {
         if let Some(encoded_block) = self.db.read(&self.prev_block_hash).unwrap() {
             let block = Block::deserialize(&encoded_block).unwrap();
             self.prev_block_hash = block.prev_block_hash.clone();
