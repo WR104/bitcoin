@@ -1,9 +1,4 @@
-extern crate ripemd;
-extern crate sha2;
-
-use std::collections::HashMap;
 use secp256k1::{SecretKey, Secp256k1, rand::rngs::OsRng};
-use ripemd::{Ripemd160, Digest};
 
 use crate::utils;
 
@@ -11,10 +6,6 @@ use crate::utils;
 pub struct Wallet {
     pub private_key: Vec<u8>,
     pub public_key: Vec<u8>,
-}
-
-pub struct Wallets {
-    pub wallets: HashMap<String, Wallet>,
 }
 
 impl Wallet {
@@ -36,24 +27,15 @@ impl Wallet {
         (private_key, public_key)   
     }
 
-    fn hash_public_key(public_key: &[u8]) -> Vec<u8> {
-        let public_sha256 = utils::compute_sha256(public_key);
-
-        // Compute RIPEMD-160 hash of the SHA-256 hash
-        let mut hasher = Ripemd160::new();
-        hasher.update(public_sha256);
-        hasher.finalize().to_vec()
-    }
-
     fn checksum(payload: &[u8]) -> Vec<u8> {
         let first_sha256 = utils::compute_sha256(payload);
         let second_sha256 = utils::compute_sha256(&first_sha256);
         second_sha256[..4].to_vec()
     } 
 
-    pub fn address() -> String {
+    pub fn address(&self) -> String {
         let wallet = Self::new();
-        let public_key_hash = Self::hash_public_key(&wallet.public_key);
+        let public_key_hash = utils::hash_public_key(&wallet.public_key);
         let versioned_payload = [0x00].to_vec();
         let mut payload = versioned_payload.clone();
         payload.extend(public_key_hash);

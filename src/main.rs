@@ -1,21 +1,17 @@
-// mod block;
-// mod blockchain;
-// mod proofofwork;
+mod block;
+mod blockchain;
+mod proofofwork;
 mod utils;
-// mod bcdb;
-// mod cli;
-// mod transaction;
+mod bcdb;
+mod cli;
+mod transaction;
 mod wallet;
+mod wallets;
 
 
-// use cli::CLI;
+use cli::CLI;
 
 fn main() {
-    // let cli = CLI;
-    // cli.run();
-
-    let wallet = wallet::Wallet::new();
-    println!("Private key: {:?}", wallet.private_key);
-    println!("Public key: {:?}", wallet.public_key);
-    println!("Address: {}", wallet::Wallet::address());
+    let cli = CLI;
+    cli.run();
 }

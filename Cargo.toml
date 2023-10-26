@@ -18,3 +18,4 @@ secp256k1 = "0.15.0"
 rand = {version = "0.8.4", features = ["std"]}
 ripemd = "0.1.3"
 num-traits = "0.2.17"
+clap = "2.33.3"
