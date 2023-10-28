@@ -52,6 +52,7 @@ impl<'a> ProofOfWork<'a> {
         (0, Vec::new()) // Return a default value if no solution is found within MAT_NONCE
     }
 
+    #[allow(dead_code)]
     pub fn validate(&self) -> bool {
         let data: Vec<u8> = self.prepare_data(self.block.nonce);
         let mut hasher = Sha256::new();

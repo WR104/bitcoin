@@ -290,7 +290,8 @@ impl Transaction {
             vout: outputs,
         };
 
-        tx.hash();
+        tx.id = tx.hash();
+        blockchain.sign_transaction(&mut tx, &utils::string_hex(sender));
         Ok(tx)
     }
 }

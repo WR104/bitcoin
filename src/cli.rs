@@ -24,9 +24,10 @@ impl CLI {
         }
 
         let matches = App::new("Blockchain CLI")
+            .bin_name("cargo run")
             .version("1.0")
             .author("Zhenyu Jia <jzhenyu3@gmail.com>")
-            .about("Blockchain Command Line Interface")
+            .about("Bitcoin implementation in Rust")
             .subcommand(SubCommand::with_name("getbalance")
                 .about("Get balance of ADDRESS")
                 .arg(Arg::with_name("ADDRESS")
@@ -112,7 +113,8 @@ impl CLI {
             return;
         }
 
-        let blockchain = Blockchain::new(address);
+        Blockchain::new(address);        
+
         println!("Done!");
     }
 
@@ -147,7 +149,7 @@ impl CLI {
 
         let mut blockchain = Blockchain::new(from);
         let tx = Transaction::new_utxo_transaction(from, to, amount, &blockchain).unwrap();
-        blockchain.mine_block(vec![tx]);
+        let _ = blockchain.mine_block(vec![tx]);
         println!("Success!");
     }
 }

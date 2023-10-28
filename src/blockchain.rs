@@ -3,8 +3,7 @@ use std::collections::HashMap;
 use crate::{
     bcdb::BlockchainDb,
     block::Block,
-    proofofwork::ProofOfWork,
-    transaction::{Transaction, TXOutput},
+    transaction::{TXOutput, Transaction},
     utils,
 };
 
@@ -39,86 +38,114 @@ impl Blockchain {
         Blockchain { tip, db }
     }
 
-    pub fn mine_block(&mut self, transactions: Vec<Transaction>) {
-        let last_hash = match self.db.read(b"1").unwrap() {
-            Some(hash) => hash,
-            None => panic!("No last hash found in the database"),
-        };
+    pub fn mine_block(&mut self, transactions: Vec<Transaction>) -> Result<(), String> {
+        // Fetch the last hash, and handle potential errors gracefully.
+        let last_hash = self.db.get_last_hash()
+            .map_err(|_| "Failed to get last hash".to_string())?
+            .ok_or("No last hash found".to_string())?;
     
-        let last_block_serialized = self.db.read(&last_hash).unwrap().expect("Failed to read last block");
-        let last_block = Block::deserialize(&last_block_serialized).expect("Failed to deserialize last block");
+        // Verify each transaction, returning an error for any invalid transaction.
+        for tx in &transactions {
+            if !self.verify_transaction(&tx) {
+                return Err(format!("Invalid transaction: {:?}", tx));
+            }
+        }
     
-        let pow = ProofOfWork::new(&last_block);
+        // Create a new block with the provided transactions and the last hash.
+        let new_block = Block::new(transactions, last_hash);
     
-        if pow.validate() {
-            let new_block = Block::new(transactions, last_hash);
+        // Attempt to write the new block to the database, handling any errors.
+        self.db.write(&new_block.hash, &new_block.serialize())
+            .map_err(|_| "Failed to write block".to_string())?;
     
-            self.db.write(&new_block.hash, &new_block.serialize())
-                .expect("Failed to write new block to the database");
+        // Update the tip of the blockchain and return success.
+        self.db.write(b"1", &new_block.hash)
+            .map_err(|_| "Failed to update last hash".to_string())?;
+        self.tip = new_block.hash;
     
-            self.db.write(b"1", &new_block.hash)
-                .expect("Failed to update the tip in the database");
+        Ok(())
+    }
     
-            self.tip = new_block.hash;
-        } else {
-            panic!("Failed to validate proof of work");
+
+
+    /// Verifies that the transaction is valid.
+    fn verify_transaction(&self, tx: &Transaction) -> bool {
+        if tx.is_coinbase() {
+            return true;
+        }
+
+        let mut prev_txs = HashMap::new();
+
+        for vin in &tx.vin {
+            let prev_tx = match self.find_transaction(&vin.txid) {
+                Some(prev_tx) => prev_tx,
+                None => return false,
+            };
+            prev_txs.insert(prev_tx.id.clone(), prev_tx);
+        }
+
+        match tx.verify(&prev_txs) {
+            Ok(is_verified) => is_verified,
+            Err(_) => false,
         }
     }
-       
+
+
+
     pub fn find_unspent_transactions(&self, pub_key_hash: &Vec<u8>) -> Vec<Transaction> {
         let mut unspent_txs = Vec::new();
         let mut spent_txos: HashMap<String, Vec<i32>> = HashMap::new();
         let mut blockchain_iterator = BlockchainIterator {
             prev_block_hash: self.tip.clone(),
             db: &self.db,
-        };        
+        };
 
         loop {
             let block = match blockchain_iterator.next() {
                 Some(block) => block,
                 None => break,
             };
-    
+
             for tx in &block.transaction {
                 let tx_id = hex::encode(&tx.id);
-    
+
                 'outputs: for (out_idx, out) in tx.vout.iter().enumerate() {
                     if let Some(spent_outputs) = spent_txos.get(&tx_id) {
                         if spent_outputs.contains(&(out_idx as i32)) {
                             continue 'outputs;
                         }
                     }
-    
+
                     if out.is_locked_with_key(&pub_key_hash) {
                         unspent_txs.push(tx.clone());
                     }
                 }
-    
+
                 if !tx.is_coinbase() {
                     for tx_input in &tx.vin {
                         if tx_input.uses_key(&pub_key_hash) {
                             let in_tx_id = hex::encode(&tx_input.txid);
-                            spent_txos.entry(in_tx_id)
+                            spent_txos
+                                .entry(in_tx_id)
                                 .or_insert_with(Vec::new)
                                 .push(tx_input.vout as i32);
                         }
                     }
                 }
             }
-    
+
             if block.prev_block_hash.is_empty() {
                 break;
             }
         }
-    
+
         unspent_txs
     }
-
 
     pub fn find_utxo(&self, pub_key_hash: Vec<u8>) -> Vec<TXOutput> {
         let mut utxo = Vec::new();
         let unspent_txs = self.find_unspent_transactions(&pub_key_hash);
-    
+
         for tx in unspent_txs {
             for out in tx.vout {
                 if out.is_locked_with_key(&pub_key_hash) {
@@ -126,7 +153,7 @@ impl Blockchain {
                 }
             }
         }
-    
+
         utxo
     }
 
@@ -148,23 +175,25 @@ impl Blockchain {
         let mut unspent_outputs = HashMap::new();
         let unspent_txs = self.find_unspent_transactions(&pub_key_hash);
         let mut accumulated = 0;
-    
-        'Work:
-        for tx in unspent_txs {
+
+        'Work: for tx in unspent_txs {
             let txid = utils::hex_string(&tx.id);
-    
+
             for (out_idx, out) in tx.vout.iter().enumerate() {
                 if out.is_locked_with_key(&pub_key_hash) && accumulated < amount {
                     accumulated += out.value;
-                    unspent_outputs.entry(txid.clone()).or_insert(vec![]).push(out_idx as i32);
-    
+                    unspent_outputs
+                        .entry(txid.clone())
+                        .or_insert(vec![])
+                        .push(out_idx as i32);
+
                     if accumulated >= amount {
                         break 'Work;
                     }
                 }
             }
         }
-    
+
         Ok((accumulated, unspent_outputs))
     }
 
@@ -198,8 +227,6 @@ impl Blockchain {
         let prev_txs = self.find_prev_txs(tx);
         tx.sign(private_key, &prev_txs);
     }
-
-    
 
     pub fn print_blocks(&self) {
         let mut blockchain_iterator = BlockchainIterator {

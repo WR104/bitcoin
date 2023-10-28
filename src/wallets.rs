@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use leveldb::database::Database;
 
 use crate::wallet::Wallet;
 
@@ -26,10 +25,6 @@ impl Wallets{
             addresses.push(address.clone());
         }
         addresses
-    }
-
-    pub fn get_wallet(&self, address: &str) -> Option<&Wallet> {
-        self.wallets.get(address)
     }
 
 }

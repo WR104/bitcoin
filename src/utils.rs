@@ -1,3 +1,5 @@
+extern crate bs58;
+
 use num_bigint::BigUint;
 use num_traits::ToPrimitive;
 use sha2::{Digest, Sha256};
@@ -155,10 +157,26 @@ pub fn sign(private_key: &[u8], data: &[u8]) -> Vec<u8> {
     sig.serialize_der().to_vec()
 }
 
+
 pub fn validate_address(address: &str) -> bool {
-    let decoded = base58_decode(address);
-    let checksum = decoded[decoded.len() - 4..].to_vec();
-    let payload = decoded[..decoded.len() - 4].to_vec();
-    let checksum2 = hash_public_key(&payload);
-    checksum == checksum2[..4].to_vec()
+    // Base58 decode the address
+    let decoded = match bs58::decode(address).into_vec() {
+        Ok(v) => v,
+        Err(_) => return false,
+    };
+
+    // Ensure the length is correct to avoid panicking while slicing
+    if decoded.len() <= 4 {
+        return false;
+    }
+
+    // Split into payload and checksum
+    let (payload, checksum) = decoded.split_at(decoded.len() - 4);
+
+    // Double SHA-256 hash the payload
+    let hash1 = Sha256::digest(payload);
+    let hash2 = Sha256::digest(&hash1);
+
+    // Compare the checksums and return the result
+    checksum == &hash2[0..4]
 }

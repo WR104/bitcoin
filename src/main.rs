@@ -1,7 +1,8 @@
+mod utils;
+
 mod block;
 mod blockchain;
 mod proofofwork;
-mod utils;
 mod bcdb;
 mod cli;
 mod transaction;
