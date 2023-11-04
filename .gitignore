@@ -1,4 +1,6 @@
 /target
 .exe
 .pdb
+.dat
+.json
 /blockchain.db
