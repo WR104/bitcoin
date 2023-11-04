@@ -13,4 +13,4 @@ cargo run printchain
 cargo run send <FROM> <TO> <AMOUNT>
 ```
 
-🚧 The send feature is currently under development and not available for use. Please check back later for updates.
+🚧 The send feature is currently under development and not available for use. Need to work on sign_transaction() and sign().
