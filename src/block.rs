@@ -46,11 +46,13 @@ impl Block {
     ///
     /// * A `Vec<u8>` containing the unique hash for all transactions in the block.
     pub fn hash_transaction(&self) -> Vec<u8> {
-        let tx_hashes: Vec<u8> = self
-            .transaction
-            .iter()
-            .flat_map(|tx| tx.id.clone())
-            .collect();
+        let mut tx_hashes = Vec::new();
+
+        for tx in &self.transaction {
+            let mut tx_hash = tx.id.clone();
+            tx_hashes.append(&mut tx_hash);
+        }
+
         utils::compute_sha256(&tx_hashes)
     }
 

@@ -1,8 +1,10 @@
 use secp256k1::{SecretKey, Secp256k1, rand::rngs::OsRng};
+use serde::{Serialize, Deserialize};
+use sha2::{Digest, Sha256};
 
-use crate::utils;
+use crate::{utils, base58};
 
-
+#[derive(Serialize, Deserialize)]
 pub struct Wallet {
     pub private_key: Vec<u8>,
     pub public_key: Vec<u8>,
@@ -28,20 +30,24 @@ impl Wallet {
     }
 
     fn checksum(payload: &[u8]) -> Vec<u8> {
-        let first_sha256 = utils::compute_sha256(payload);
-        let second_sha256 = utils::compute_sha256(&first_sha256);
-        second_sha256[..4].to_vec()
+        let mut hasher = Sha256::new();
+        hasher.update(payload);
+        let first_hash = hasher.finalize();
+
+        hasher = Sha256::new();
+        hasher.update(first_hash);
+        let second_hash = hasher.finalize();
+
+        second_hash[..4].to_vec()
     } 
 
     pub fn address(&self) -> String {
-        let wallet = Self::new();
-        let public_key_hash = utils::hash_public_key(&wallet.public_key);
-        let versioned_payload = [0x00].to_vec();
-        let mut payload = versioned_payload.clone();
-        payload.extend(public_key_hash);
-        let checksum = Self::checksum(&payload);
-        payload.extend(checksum);
-        utils::base58_encode(&payload)
+        let pub_key_hash = utils::hash_public_key(&self.public_key);
+        let versioned_payload = [vec![0x00], pub_key_hash].concat();
+        let checksum = Self::checksum(&versioned_payload);
+        let full_payload = [versioned_payload, checksum].concat();
+        let address = base58::encode(&full_payload);
+        String::from_utf8(address).unwrap()
     }
 
 }

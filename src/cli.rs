@@ -1,7 +1,7 @@
 use std::env;
 use clap::{App, Arg, SubCommand};
 
-use crate::{blockchain::Blockchain, utils, wallets::Wallets, transaction::Transaction};
+use crate::{blockchain::Blockchain, utils, wallets::Wallets, transaction::{self}, base58};
 
 pub struct CLI;
 
@@ -96,8 +96,8 @@ impl CLI {
 
         let blockchain = Blockchain::new(address);
         let mut balance = 0;
-        let pub_key_hash = utils::base58_decode(address);
-        let pub_key_hash = &pub_key_hash[1..20];
+        let pub_key_hash = base58::decode(address.as_bytes());
+        let pub_key_hash = &pub_key_hash[1..pub_key_hash.len() - 4];
         let utxos = blockchain.find_utxo(pub_key_hash.clone().to_vec());
 
         for out in utxos {
@@ -121,12 +121,13 @@ impl CLI {
     pub fn create_wallet(&self) {
         let mut wallets = Wallets::new();
         let address = wallets.create_wallet();
+        wallets.save_file().unwrap();
         println!("Your new address: {}", address);
     }
 
     pub fn list_addresses(&self) {
         let wallets = Wallets::new();
-        let addresses = wallets.get_addresses();
+        let addresses: Vec<String> = wallets.get_addresses();
         for address in addresses {
             println!("{}", address);
         }
@@ -148,7 +149,7 @@ impl CLI {
         }
 
         let mut blockchain = Blockchain::new(from);
-        let tx = Transaction::new_utxo_transaction(from, to, amount, &blockchain).unwrap();
+        let tx = transaction::new_utxo_transaction(from, to, amount, &blockchain).unwrap();
         let _ = blockchain.mine_block(vec![tx]);
         println!("Success!");
     }

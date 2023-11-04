@@ -1,4 +1,4 @@
-use crate::utils;
+use crate::{utils::{self}, wallets::Wallets, base58};
 use core::fmt;
 use secp256k1::{Message, PublicKey, Secp256k1, Signature};
 use serde::{Deserialize, Serialize};
@@ -40,8 +40,8 @@ impl TXInput {
 impl TXOutput {
     // Lock sings the output
     pub fn lock(&mut self, address: &str) {
-        let pub_key_hash = utils::base58_decode(address);
-        self.pub_key_hash = pub_key_hash[1..20].to_vec();
+        let pub_key_hash = base58::decode(address.as_bytes());
+        self.pub_key_hash = pub_key_hash[1..pub_key_hash.len() - 4].to_vec();
     }
 
     // Check if the output is locked with the given key
@@ -120,13 +120,13 @@ impl Transaction {
     ///
     /// * `private_key` - The private key of the sender.
     /// * `prev_txs` - The previous transactions.
-    pub fn sign(&mut self, private_key: &[u8], prev_txs: &HashMap<Vec<u8>, Transaction>) {
+    pub fn sign(&mut self, private_key: &[u8], prev_txs: &HashMap<String, Transaction>) {
         if self.is_coinbase() {
             return;
         }
     
         for vin in &self.vin {
-            if prev_txs.get(&vin.txid).is_none() {
+            if prev_txs.get(&utils::hex_string(&vin.txid)).is_none() {
                 eprintln!("ERROR: Previous transaction is not correct");
                 process::exit(1);
             }
@@ -134,24 +134,23 @@ impl Transaction {
     
         let mut tx_copy = self.trimmed_copy();
     
-        for (_in_id, vin) in tx_copy.vin.iter_mut().enumerate() {
-            let prev_tx = match prev_txs.get(&vin.txid) {
-                Some(tx) => tx,
-                None => {
-                    eprintln!("ERROR: Previous transaction is not correct");
-                    process::exit(1);
-                }
-            };
-    
-            let mut prev_tx_copy = prev_tx.trimmed_copy();
-            prev_tx_copy.vout[vin.vout as usize].value = 0;
-            prev_tx_copy.id = prev_tx_copy.hash();
-    
-            vin.signature = utils::sign(private_key, &prev_tx_copy.id);
-            vin.pub_key = utils::hash_public_key(&utils::get_public_key(private_key));
+        for (in_id, vin) in tx_copy.vin.iter_mut().enumerate() {
+            let prev_tx = prev_txs.get(&utils::hex_string(&vin.txid)).unwrap();
+
+            vin.signature = Vec::new();
+            vin.pub_key = prev_tx.vout[vin.vout as usize].pub_key_hash.clone();
+
+            let mut data_to_sign = String::new();
+
+            data_to_sign.push_str(&utils::hex_string(&tx_copy.id));
+
+            let signature = utils::sign(private_key, &utils::string_hex(&data_to_sign));
+
+            self.vin[in_id].signature = signature;
+
+            // Reset the pub_key for the next iteration
+            vin.pub_key = Vec::new();
         }
-    
-        self.vin = tx_copy.vin;
     }
 
     fn trimmed_copy(&self) -> Transaction {
@@ -199,99 +198,97 @@ impl Transaction {
             }
         }
 
-        let _tx_copy = self.trimmed_copy();
+        let mut tx_copy = self.trimmed_copy();
         let secp = Secp256k1::new();
+        let mut success = Ok(());
 
-        for (_in_id, vin) in self.vin.iter().enumerate() {
+        for (in_id, vin) in self.vin.iter().enumerate() {
             let prev_tx = &prev_txs[&vin.txid];
-            let mut prev_tx_copy = prev_tx.trimmed_copy();
-            prev_tx_copy.vout[vin.vout as usize].value = 0;
-            prev_tx_copy.id = prev_tx_copy.hash();
+            tx_copy.vin[in_id].signature = Vec::new();
+            tx_copy.vin[in_id].pub_key = prev_tx.vout[vin.vout as usize].pub_key_hash.clone();
+            tx_copy.id = tx_copy.hash();
+            tx_copy.vin[in_id].pub_key = Vec::new();
 
-            let message = Message::from_slice(&prev_tx_copy.id)
-            .map_err(|_| "ERROR: Failed to create message from slice")?;
-    
-        let public_key = PublicKey::from_slice(&vin.pub_key)
-            .map_err(|_| "ERROR: Failed to create public key from slice")?;
-    
-        // Convert vin.signature from Vec<u8> to Signature
-        let signature = Signature::from_der(&vin.signature)
-            .map_err(|_| "ERROR: Failed to create signature from DER")?;
-    
-        // Now, pass the converted signature to the verify method
-        let verification_result = secp.verify(&message, &signature, &public_key);
-        if verification_result.is_err() {
-            return Err("ERROR: Signature verification failed".into());
-        }
-        }
+            let sig = Signature::from_compact(&vin.signature)?;
+            let pub_key = PublicKey::from_slice(&vin.pub_key)?;
+            let message = Message::from_slice(&tx_copy.id)?;
 
-        Ok(true)
-    }
-
-    pub fn new_coinbase_tx(to: &str, data: &str) -> Self {
-        if data.is_empty() {
-            panic!("Data must not be empty");
-        }
-        let txin = TXInput {
-            txid: vec![],
-            vout: -1,
-            signature: data.as_bytes().to_vec(),
-            pub_key: vec![],
-        };
-        let txout = TXOutput::new(SUBSIDY, to);
-        let mut tx = Transaction {
-            id: vec![],
-            vin: vec![txin],
-            vout: vec![txout],
-        };
-        tx.set_id();
-        tx
-    }
-
-    pub fn new_utxo_transaction(
-        sender: &str,
-        receiver: &str,
-        amount: i32,
-        blockchain: &Blockchain,
-    ) -> Result<Self, Box<dyn Error>> {
-        let mut inputs: Vec<TXInput> = Vec::new();
-        let mut outputs: Vec<TXOutput> = Vec::new();
-
-        let (acc, valid_outputs) = blockchain.find_spendable_outputs(
-            utils::base58_decode(sender),
-            amount,
-        )?;
-
-        if acc < amount {
-            return Err("ERROR: Not enough funds".into());
-        }
-
-        for (txid, outs) in valid_outputs {
-            let tx_id = utils::string_hex(&txid);
-            for out in outs {
-                let input = TXInput {
-                    txid: tx_id.clone(),
-                    vout: out,
-                    signature: Vec::new(),
-                    pub_key: utils::base58_decode(sender),
-                };
-                inputs.push(input);
+            if !secp.verify(&message, &sig, &pub_key).is_ok() {
+                success = Err("ERROR: Invalid signature".into());
+                break;
             }
         }
 
-        outputs.push(TXOutput::new(amount, receiver));
-        if acc > amount {
-            outputs.push(TXOutput::new(acc - amount, sender));
-        }
-
-        let mut tx = Transaction {
-            id: vec![],
-            vin: inputs,
-            vout: outputs,
-        };
-
-        tx.id = tx.hash();
-        blockchain.sign_transaction(&mut tx, &utils::string_hex(sender));
-        Ok(tx)
+        success.map(|_| true)
     }
+
+}
+
+pub fn new_coinbase_tx(to: &str, data: &str) -> Transaction {
+    if data.is_empty() {
+        panic!("ERROR: Data must not be empty");
+    }
+
+    let txin = TXInput {
+        txid: vec![],
+        vout: -1,
+        signature: Vec::new(),
+        pub_key: vec![],
+    };
+    let txout = TXOutput::new(SUBSIDY, to);
+    let mut tx = Transaction {
+        id: vec![],
+        vin: vec![txin],
+        vout: vec![txout],
+    };
+    tx.set_id();
+    tx
+}
+
+pub fn new_utxo_transaction(
+    from: &str,
+    to: &str,
+    amount: i32,
+    blockchain: &Blockchain,
+) -> Result<Transaction, Box<dyn Error>> {
+    let mut inputs: Vec<TXInput> = Vec::new();
+    let mut outputs: Vec<TXOutput> = Vec::new();
+
+    let wallets = Wallets::new();
+    let wallet = wallets.get_wallet(from).ok_or("ERROR: Sender address not found")?;
+    let pub_key_hash = utils::hash_public_key(&wallet.public_key);
+
+    let (acc, valid_outputs) = blockchain.find_spendable_outputs(pub_key_hash.clone(), amount)?;
+
+    if acc < amount {
+        return Err("ERROR: Not enough funds".into());
+    }
+
+    for (txid, outs) in valid_outputs {
+        let tx_id = utils::string_hex(&txid);
+        for out in outs {
+            let input = TXInput {
+                txid: tx_id.clone(),
+                vout: out,
+                signature: Vec::new(),
+                pub_key: pub_key_hash.clone(),
+            };
+            inputs.push(input);
+        }
+    }
+
+    outputs.push(TXOutput::new(amount, to));
+    if acc > amount {
+        outputs.push(TXOutput::new(acc - amount, from));
+    }
+
+    let mut tx = Transaction {
+        id: vec![],
+        vin: inputs,
+        vout: outputs,
+    };
+    tx.set_id();
+    let blockchain = blockchain.clone();
+    blockchain.sign_transaction(&mut tx, &wallet.private_key.clone());
+    Ok(tx)
 }

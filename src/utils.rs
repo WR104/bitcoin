@@ -1,7 +1,5 @@
 extern crate bs58;
 
-use num_bigint::BigUint;
-use num_traits::ToPrimitive;
 use sha2::{Digest, Sha256};
 use ripemd::Ripemd160;
 
@@ -27,6 +25,7 @@ pub fn hex_string(bytes: &[u8]) -> String {
 /// # Returns
 ///
 /// * A `Vec<u8>` containing the byte representation of the hexadecimal string.
+#[allow(dead_code)]
 pub fn string_hex(s: &str) -> Vec<u8> {
     hex::decode(s).unwrap_or_else(|e| {
         eprint!("Failed to decode hex string: {}", e);
@@ -57,12 +56,13 @@ pub fn compute_sha256(data: &[u8]) -> Vec<u8> {
 /// 
 /// * A `Vec<u8>` containing the RIPEMD-160 hash of the data.
 pub fn hash_public_key(public_key: &[u8]) -> Vec<u8> {
-    let public_sha256 = compute_sha256(public_key);
+    let mut hasher = Sha256::new();
+    hasher.update(public_key);
+    let public_sha256 = hasher.finalize();
 
-    // Compute RIPEMD-160 hash of the SHA-256 hash
-    let mut hasher = Ripemd160::new();
-    hasher.update(public_sha256);
-    hasher.finalize().to_vec()
+    let mut ripemd160 = Ripemd160::new();
+    ripemd160.update(public_sha256);
+    ripemd160.finalize().to_vec()
 }
 
 /// gets the public key from the given private key.
@@ -74,6 +74,7 @@ pub fn hash_public_key(public_key: &[u8]) -> Vec<u8> {
 /// # Returns
 /// 
 /// * A `Vec<u8>` containing the public key.
+#[allow(dead_code)]
 pub fn get_public_key(private_key: &[u8]) -> Vec<u8> {
     let secp = secp256k1::Secp256k1::new();
     let secret_key = secp256k1::SecretKey::from_slice(private_key).unwrap();
@@ -90,54 +91,57 @@ pub fn get_public_key(private_key: &[u8]) -> Vec<u8> {
 /// # Returns
 /// 
 /// * A `String` containing the base58 representation of the byte slice.
-pub fn base58_encode(payload: &[u8]) -> String {
-    let payload = payload.to_vec();
-    let mut result = Vec::new();
-    let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".as_bytes();
-    let base = alphabet.len();
-    let mut leading_zeroes_count = 0;
-    for b in payload.iter() {
-        if *b == 0 {
-            leading_zeroes_count += 1;
-        } else {
-            break;
-        }
-    }
-    let mut x = BigUint::from_bytes_be(&payload);
-    while x > BigUint::from(0 as u8) {
-        let rem = x.clone() % base;
-        result.push(alphabet[rem.to_usize().unwrap()]);
-        x = x / base;
-    }
-    for _ in 0..leading_zeroes_count {
-        result.push(alphabet[0]);
-    }
-    result.reverse();
-    String::from_utf8(result).unwrap()
-}
+// pub fn base58_encode(payload: &[u8]) -> String {
+//     let payload = payload.to_vec();
+//     let mut result = Vec::new();
+//     let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".as_bytes();
+//     let base = alphabet.len();
+//     let mut leading_zeroes_count = 0;
+//     for b in payload.iter() {
+//         if *b == 0 {
+//             leading_zeroes_count += 1;
+//         } else {
+//             break;
+//         }
+//     }
+//     let mut x = BigUint::from_bytes_be(&payload);
+//     while x > BigUint::from(0 as u8) {
+//         let rem = x.clone() % base;
+//         result.push(alphabet[rem.to_usize().unwrap()]);
+//         x = x / base;
+//     }
+//     for _ in 0..leading_zeroes_count {
+//         result.push(alphabet[0]);
+//     }
+//     result.reverse();
+//     String::from_utf8(result).unwrap()
+// }
 
-pub fn base58_decode(payload: &str) -> Vec<u8> {
-    let mut result = BigUint::from(0 as u8);
-    let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".as_bytes();
-    let base = alphabet.len();
-    let mut leading_zeroes_count = 0;
-    for b in payload.as_bytes().iter() {
-        if *b == alphabet[0] {
-            leading_zeroes_count += 1;
-        } else {
-            break;
-        }
-    }
-    for b in payload.as_bytes().iter() {
-        let position = alphabet.iter().position(|&x| x == *b).unwrap();
-        result = result * base + BigUint::from(position as u8);
-    }
-    let mut bytes = result.to_bytes_be();
-    for _ in 0..leading_zeroes_count {
-        bytes.insert(0, 0);
-    }
-    bytes
-}
+// pub fn base58_decode(input: &str) -> Vec<u8> {
+//     let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+//     let base = BigUint::from(alphabet.len());
+
+//     let mut result = BigUint::zero();
+//     let mut leading_zeroes = 0;
+//     let mut leading_zeroes_handled = false;
+
+//     for &byte in input.as_bytes() {
+//         if byte == b'1' && !leading_zeroes_handled {
+//             leading_zeroes += 1;
+//         } else {
+//             leading_zeroes_handled = true;
+//             let char_index = alphabet.find(byte as char)
+//                 .unwrap_or_else(|| panic!("Invalid character in Base58 string: {}", byte as char));
+//             result = result * &base + BigUint::from(char_index);
+//         }
+//     }
+
+//     let mut result_bytes = result.to_bytes_be();
+//     let mut bytes = vec![0; leading_zeroes];
+//     bytes.append(&mut result_bytes);
+
+//     bytes
+// }
 
 /// signs the given data with the given private key.
 /// 

@@ -3,11 +3,11 @@ use std::collections::HashMap;
 use crate::{
     bcdb::BlockchainDb,
     block::Block,
-    transaction::{TXOutput, Transaction},
+    transaction::{TXOutput, Transaction, self},
     utils,
 };
 
-const DB_FILE: &str = "blockchain.db";
+const DB_FILE: &str = "../blockchain.db";
 const GENESIS_COINBASE_DATA: &str =
     "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
 
@@ -16,6 +16,7 @@ pub struct Blockchain {
     pub tip: Vec<u8>,
     pub db: BlockchainDb,
 }
+
 
 impl Blockchain {
     pub fn new(address: &str) -> Self {
@@ -27,7 +28,7 @@ impl Blockchain {
             panic!("Please create blockchain first");
         } else {
             println!("No existing blockchain found. Creating a new one...");
-            let coinbase = Transaction::new_coinbase_tx(address, GENESIS_COINBASE_DATA);
+            let coinbase = transaction::new_coinbase_tx(address, GENESIS_COINBASE_DATA);
             let genesis_block = Block::new_genesis_block(vec![coinbase]);
             db.write(&genesis_block.hash, &genesis_block.serialize())
                 .unwrap();
@@ -66,33 +67,7 @@ impl Blockchain {
         Ok(())
     }
     
-
-
-    /// Verifies that the transaction is valid.
-    fn verify_transaction(&self, tx: &Transaction) -> bool {
-        if tx.is_coinbase() {
-            return true;
-        }
-
-        let mut prev_txs = HashMap::new();
-
-        for vin in &tx.vin {
-            let prev_tx = match self.find_transaction(&vin.txid) {
-                Some(prev_tx) => prev_tx,
-                None => return false,
-            };
-            prev_txs.insert(prev_tx.id.clone(), prev_tx);
-        }
-
-        match tx.verify(&prev_txs) {
-            Ok(is_verified) => is_verified,
-            Err(_) => false,
-        }
-    }
-
-
-
-    pub fn find_unspent_transactions(&self, pub_key_hash: &Vec<u8>) -> Vec<Transaction> {
+    pub fn find_unspent_transactions(&self, pub_key_hash: &[u8]) -> Vec<Transaction> {
         let mut unspent_txs = Vec::new();
         let mut spent_txos: HashMap<String, Vec<i32>> = HashMap::new();
         let mut blockchain_iterator = BlockchainIterator {
@@ -100,31 +75,23 @@ impl Blockchain {
             db: &self.db,
         };
 
-        loop {
-            let block = match blockchain_iterator.next() {
-                Some(block) => block,
-                None => break,
-            };
-
+        while let Some(block) = blockchain_iterator.next() {
             for tx in &block.transaction {
-                let tx_id = hex::encode(&tx.id);
+                let tx_id = utils::hex_string(&tx.id);
 
                 'outputs: for (out_idx, out) in tx.vout.iter().enumerate() {
-                    if let Some(spent_outputs) = spent_txos.get(&tx_id) {
-                        if spent_outputs.contains(&(out_idx as i32)) {
-                            continue 'outputs;
-                        }
+                    if spent_txos.get(&tx_id).map_or(false, |spent| spent.contains(&(out_idx as i32))) {
+                        continue 'outputs;
                     }
-
-                    if out.is_locked_with_key(&pub_key_hash) {
+                    if out.is_locked_with_key(pub_key_hash) {
                         unspent_txs.push(tx.clone());
                     }
                 }
 
                 if !tx.is_coinbase() {
                     for tx_input in &tx.vin {
-                        if tx_input.uses_key(&pub_key_hash) {
-                            let in_tx_id = hex::encode(&tx_input.txid);
+                        if tx_input.uses_key(pub_key_hash) {
+                            let in_tx_id = utils::hex_string(&tx_input.txid);
                             spent_txos
                                 .entry(in_tx_id)
                                 .or_insert_with(Vec::new)
@@ -176,7 +143,7 @@ impl Blockchain {
         let unspent_txs = self.find_unspent_transactions(&pub_key_hash);
         let mut accumulated = 0;
 
-        'Work: for tx in unspent_txs {
+        'work: for tx in unspent_txs {
             let txid = utils::hex_string(&tx.id);
 
             for (out_idx, out) in tx.vout.iter().enumerate() {
@@ -184,11 +151,11 @@ impl Blockchain {
                     accumulated += out.value;
                     unspent_outputs
                         .entry(txid.clone())
-                        .or_insert(vec![])
+                        .or_insert_with(Vec::new)
                         .push(out_idx as i32);
 
                     if accumulated >= amount {
-                        break 'Work;
+                        break 'work;
                     }
                 }
             }
@@ -214,11 +181,11 @@ impl Blockchain {
         None
     }
 
-    fn find_prev_txs(&self, tx: &Transaction) -> HashMap<Vec<u8>, Transaction> {
-        let mut prev_txs = HashMap::new();
+    fn find_prev_txs(&self, tx: &Transaction) -> HashMap<String, Transaction> {
+        let mut prev_txs: HashMap<String, Transaction> = HashMap::new();
         for vin in &tx.vin {
             let prev_tx = self.find_transaction(&vin.txid).unwrap();
-            prev_txs.insert(prev_tx.id.clone(), prev_tx);
+            prev_txs.insert(utils::hex_string(&prev_tx.id), prev_tx);
         }
         prev_txs
     }
@@ -227,6 +194,29 @@ impl Blockchain {
         let prev_txs = self.find_prev_txs(tx);
         tx.sign(private_key, &prev_txs);
     }
+
+    /// Verifies that the transaction is valid.
+    fn verify_transaction(&self, tx: &Transaction) -> bool {
+        if tx.is_coinbase() {
+            return true;
+        }
+
+        let mut prev_txs = HashMap::new();
+
+        for vin in &tx.vin {
+            let prev_tx = match self.find_transaction(&vin.txid) {
+                Some(prev_tx) => prev_tx,
+                None => return false,
+            };
+            prev_txs.insert(prev_tx.id.clone(), prev_tx);
+        }
+
+        match tx.verify(&prev_txs) {
+            Ok(is_verified) => is_verified,
+            Err(_) => false,
+        }
+    }
+    
 
     pub fn print_blocks(&self) {
         let mut blockchain_iterator = BlockchainIterator {
