@@ -1,7 +1,13 @@
-use std::env;
 use clap::{App, Arg, SubCommand};
+use std::env;
 
-use crate::{blockchain::Blockchain, utils, wallets::Wallets, transaction::{self}, base58};
+use crate::{
+    base58,
+    blockchain::Blockchain,
+    transaction::{self},
+    utils,
+    wallets::Wallets,
+};
 
 pub struct CLI;
 
@@ -28,33 +34,36 @@ impl CLI {
             .version("1.0")
             .author("Zhenyu Jia <jzhenyu3@gmail.com>")
             .about("Bitcoin implementation in Rust")
-            .subcommand(SubCommand::with_name("getbalance")
-                .about("Get balance of ADDRESS")
-                .arg(Arg::with_name("ADDRESS")
-                     .required(true)
-                     .index(1)))
-            .subcommand(SubCommand::with_name("createblockchain")
-                .about("Create a blockchain and send genesis block reward to ADDRESS")
-                .arg(Arg::with_name("ADDRESS")
-                     .required(true)
-                     .index(1)))
-            .subcommand(SubCommand::with_name("createwallet")
-                .about("Generates a new key-pair and saves it into the wallet file"))
-            .subcommand(SubCommand::with_name("listaddresses")
-                .about("Lists all addresses from the wallet file"))
-            .subcommand(SubCommand::with_name("printchain")
-                .about("Print all the blocks of the blockchain"))
-            .subcommand(SubCommand::with_name("send")
-                .about("Send AMOUNT of coins from FROM address to TO")
-                .arg(Arg::with_name("FROM")
-                     .required(true)
-                     .index(1))
-                .arg(Arg::with_name("TO")
-                     .required(true)
-                     .index(2))
-                .arg(Arg::with_name("AMOUNT")
-                     .required(true)
-                     .index(3)))
+            .subcommand(
+                SubCommand::with_name("getbalance")
+                    .about("Get balance of ADDRESS")
+                    .arg(Arg::with_name("ADDRESS").required(true).index(1)),
+            )
+            .subcommand(
+                SubCommand::with_name("createblockchain")
+                    .about("Create a blockchain and send genesis block reward to ADDRESS")
+                    .arg(Arg::with_name("ADDRESS").required(true).index(1)),
+            )
+            .subcommand(
+                SubCommand::with_name("createwallet")
+                    .about("Generates a new key-pair and saves it into the wallet file"),
+            )
+            .subcommand(
+                SubCommand::with_name("listaddresses")
+                    .about("Lists all addresses from the wallet file"),
+            )
+            .subcommand(
+                SubCommand::with_name("printchain").about("Print all the blocks of the blockchain"),
+            )
+            .subcommand(
+                SubCommand::with_name("send")
+                    .about("Send AMOUNT of coins from FROM address to TO")
+                    .arg(Arg::with_name("FROM").required(true).index(1))
+                    .arg(Arg::with_name("TO").required(true).index(2))
+                    .arg(Arg::with_name("AMOUNT").required(true).index(3)),
+            )
+            .subcommand(SubCommand::with_name("clear"))
+            .about("Delete all blocks and walletes")
             .get_matches();
 
         // Match the subcommands and execute the corresponding code
@@ -81,6 +90,12 @@ impl CLI {
                 let to = sub_m.value_of("TO").unwrap();
                 let amount = sub_m.value_of("AMOUNT").unwrap().parse::<i32>().unwrap();
                 self.send(from, to, amount);
+            }
+            ("clear", Some(_)) => {
+                let current_dir = std::fs::read_dir(".").expect("Failed to read current directory");
+
+                // Delete all .json files and folders named blockchain.db
+                Self::delete_files_and_folders(current_dir, "json", "blockchain.db");
             }
             _ => {
                 eprintln!("Invalid command. Use --help for usage information.");
@@ -113,7 +128,7 @@ impl CLI {
             return;
         }
 
-        Blockchain::new(address);        
+        Blockchain::new(address);
 
         println!("Done!");
     }
@@ -150,7 +165,24 @@ impl CLI {
 
         let mut blockchain = Blockchain::new(from);
         let tx = transaction::new_utxo_transaction(from, to, amount, &blockchain).unwrap();
-        let _ = blockchain.mine_block(vec![tx]);
+        blockchain.mine_block(vec![tx]);
         println!("Success!");
+    }
+
+    fn delete_files_and_folders(directory: std::fs::ReadDir, file_ext: &str, folder_name: &str) {
+        for entry in directory {
+            if let Ok(entry) = entry {
+                let path = entry.path();
+                if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some(file_ext) {
+                    // Attempt to delete the file and ignore the result
+                    let _ = std::fs::remove_file(&path);
+                } else if path.is_dir()
+                    && path.file_name().and_then(|s| s.to_str()) == Some(folder_name)
+                {
+                    // Attempt to delete the folder and ignore the result
+                    let _ = std::fs::remove_dir_all(&path);
+                }
+            }
+        }
     }
 }

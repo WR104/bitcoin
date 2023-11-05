@@ -187,20 +187,19 @@ impl Transaction {
     ///
     /// * `true` if the signatures are valid.
     /// * `false` otherwise.
-    pub fn verify(&self, prev_txs: &HashMap<Vec<u8>, Transaction>) -> Result<bool, Box<dyn Error>> {
+    pub fn verify(&self, prev_txs: &HashMap<Vec<u8>, Transaction>) -> bool {
         if self.is_coinbase() {
-            return Ok(true);
+            return true;
         }
 
         for vin in &self.vin {
             if prev_txs.get(&vin.txid).is_none() {
-                return Err("ERROR: Previous transaction is not correct".into());
+                panic!("ERROR: Previous transaction is not correct");
             }
         }
 
         let mut tx_copy = self.trimmed_copy();
-        let secp = Secp256k1::new();
-        let mut success = Ok(());
+        let secp = Secp256k1::verification_only();
 
         for (in_id, vin) in self.vin.iter().enumerate() {
             let prev_tx = &prev_txs[&vin.txid];
@@ -209,17 +208,18 @@ impl Transaction {
             tx_copy.id = tx_copy.hash();
             tx_copy.vin[in_id].pub_key = Vec::new();
 
-            let sig = Signature::from_compact(&vin.signature)?;
-            let pub_key = PublicKey::from_slice(&vin.pub_key)?;
-            let message = Message::from_slice(&tx_copy.id)?;
 
-            if !secp.verify(&message, &sig, &pub_key).is_ok() {
-                success = Err("ERROR: Invalid signature".into());
-                break;
+            let message = Message::from_slice(&tx_copy.id).expect("Invalid message");
+            let sig = Signature::from_der(&vin.signature).expect("Invalid signature");
+            println!("pub_key: {:?}", &vin.pub_key.len());
+            let pub_key = PublicKey::from_slice(&vin.pub_key).expect("Invalid public key");
+
+            if secp.verify(&message, &sig, &pub_key).is_err() {
+                return false;
             }
-        }
+    }
 
-        success.map(|_| true)
+        true
     }
 
 }

@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::wallet::Wallet;
 
-const PATH: &str = "../wallet.json";
+const PATH: &str = "wallet.json";
 
 pub struct Wallets {
     wallets: HashMap<String, Wallet>,

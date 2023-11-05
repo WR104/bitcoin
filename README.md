@@ -13,4 +13,6 @@ cargo run printchain
 cargo run send <FROM> <TO> <AMOUNT>
 ```
 
-🚧 The send feature is currently under development and not available for use. Need to work on sign_transaction() and sign().
+This project is based on the [blockchain_go](https://github.com/Jeiwan/blockchain_go) repository.
+
+🚧 Need to work on blockchain.rs line 227.

@@ -7,7 +7,7 @@ use crate::{
     utils,
 };
 
-const DB_FILE: &str = "../blockchain.db";
+const DB_FILE: &str = "blockchain.db";
 const GENESIS_COINBASE_DATA: &str =
     "The Times 03/Jan/2009 Chancellor on brink of second bailout for banks";
 
@@ -39,32 +39,45 @@ impl Blockchain {
         Blockchain { tip, db }
     }
 
-    pub fn mine_block(&mut self, transactions: Vec<Transaction>) -> Result<(), String> {
-        // Fetch the last hash, and handle potential errors gracefully.
-        let last_hash = self.db.get_last_hash()
-            .map_err(|_| "Failed to get last hash".to_string())?
-            .ok_or("No last hash found".to_string())?;
+    pub fn mine_block(&mut self, transactions: Vec<Transaction>) {
+        // Fetch the last hash, and log an error if it fails.
+        let last_hash = match self.db.get_last_hash() {
+            Ok(Some(hash)) => hash,
+            Ok(None) => {
+                println!("No last hash found");
+                return;
+            }
+            Err(_) => {
+                println!("Failed to get last hash");
+                return;
+            }
+        };
     
-        // Verify each transaction, returning an error for any invalid transaction.
+        // Verify each transaction, logging an error for any invalid transaction.
         for tx in &transactions {
             if !self.verify_transaction(&tx) {
-                return Err(format!("Invalid transaction: {:?}", tx));
+                println!("Invalid transaction: {:?}", tx);
+                return;
             }
         }
     
         // Create a new block with the provided transactions and the last hash.
         let new_block = Block::new(transactions, last_hash);
     
-        // Attempt to write the new block to the database, handling any errors.
-        self.db.write(&new_block.hash, &new_block.serialize())
-            .map_err(|_| "Failed to write block".to_string())?;
+        // Attempt to write the new block to the database, logging any errors.
+        if let Err(_) = self.db.write(&new_block.hash, &new_block.serialize()) {
+            println!("Failed to write block");
+            return;
+        }
     
-        // Update the tip of the blockchain and return success.
-        self.db.write(b"1", &new_block.hash)
-            .map_err(|_| "Failed to update last hash".to_string())?;
+        // Update the tip of the blockchain, logging any errors.
+        if let Err(_) = self.db.write(b"1", &new_block.hash) {
+            println!("Failed to update last hash");
+            return;
+        }
+    
         self.tip = new_block.hash;
-    
-        Ok(())
+        // If all operations are successful, the function simply ends.
     }
     
     pub fn find_unspent_transactions(&self, pub_key_hash: &[u8]) -> Vec<Transaction> {
@@ -211,10 +224,9 @@ impl Blockchain {
             prev_txs.insert(prev_tx.id.clone(), prev_tx);
         }
 
-        match tx.verify(&prev_txs) {
-            Ok(is_verified) => is_verified,
-            Err(_) => false,
-        }
+        // Need to work on this funciton
+        // tx.verify(&prev_txs)
+        true
     }
     
 
