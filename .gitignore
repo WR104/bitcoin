@@ -3,4 +3,6 @@
 .pdb
 .dat
 .json
+wallet.json
+wallets.json
 /blockchain.db
