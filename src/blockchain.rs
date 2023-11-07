@@ -251,7 +251,7 @@ pub struct BlockchainIterator<'a> {
 impl<'a> BlockchainIterator<'a> {
     pub fn next(&mut self) -> Option<Block> {
         if let Some(encoded_block) = self.db.read(&self.prev_block_hash).unwrap() {
-            let block = Block::deserialize(&encoded_block).unwrap();
+            let block = Block::deserialize(&encoded_block);
             self.prev_block_hash = block.prev_block_hash.clone();
             Some(block)
         } else {

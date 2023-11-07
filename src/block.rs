@@ -33,22 +33,22 @@ impl Block {
         block
     }
 
+    /// deserializes a block from a byte array
+    pub fn deserialize(data: &[u8]) -> Block {
+        bincode::deserialize(data).expect("Failed to deserialize block")
+    }
+
+    /// generates a new genesis block
     pub fn new_genesis_block(coinbase: Vec<Transaction>) -> Block {
         Block::new(coinbase, vec![])
     }
 
-    /// Computes a unique hash for all transactions in a block.
-    ///
-    /// Transactions in a block are uniquely identified by concatenating the hashes of each transaction
-    /// and then hashing the concatenated combination.
-    ///
-    /// # Returns
-    ///
-    /// * A `Vec<u8>` containing the unique hash for all transactions in the block.
+   
+    /// computes the hash of the block
     pub fn hash_transaction(&self) -> Vec<u8> {
         let mut tx_hashes = Vec::new();
 
-        for tx in &self.transaction {
+        for tx in &self.transaction.clone() {
             let mut tx_hash = tx.id.clone();
             tx_hashes.append(&mut tx_hash);
         }
@@ -66,9 +66,5 @@ impl Block {
 
     pub fn serialize(&self) -> Vec<u8> {
         bincode::serialize(self).expect("Failed to serialize block")
-    }
-
-    pub fn deserialize(data: &[u8]) -> Result<Self, bincode::Error> {
-        bincode::deserialize(data)
     }
 }

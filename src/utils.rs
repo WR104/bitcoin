@@ -1,30 +1,18 @@
 extern crate bs58;
 
-use sha2::{Digest, Sha256};
+use sha2::{Digest as SHA256Digest, Sha256};
 use ripemd::Ripemd160;
+use crypto::digest::Digest;
+use std::iter::repeat;
+use ring::rand::SystemRandom;
+use ring::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED, ECDSA_P256_SHA256_FIXED_SIGNING};
 
 /// Encodes a byte slice into its hexadecimal representation.
-///
-/// # Arguments
-///
-/// * `bytes` - A byte slice to be encoded.
-///
-/// # Returns
-///
-/// * A `String` containing the hexadecimal representation of the byte slice.
 pub fn hex_string(bytes: &[u8]) -> String {
     hex::encode(bytes)
 }
 
 /// Decodes a hexadecimal string into its byte representation.
-///
-/// # Arguments
-///
-/// * `s` - A string slice containing the hexadecimal representation.
-///
-/// # Returns
-///
-/// * A `Vec<u8>` containing the byte representation of the hexadecimal string.
 #[allow(dead_code)]
 pub fn string_hex(s: &str) -> Vec<u8> {
     hex::decode(s).unwrap_or_else(|e| {
@@ -34,16 +22,53 @@ pub fn string_hex(s: &str) -> Vec<u8> {
 }
 
 /// Computes the SHA-256 hash of the given data.
-///
-/// # Arguments
-///
-/// * `data` - A byte slice to be hashed.
-///
-/// # Returns
-///
-/// * A `Vec<u8>` containing the SHA-256 hash of the data.
 pub fn compute_sha256(data: &[u8]) -> Vec<u8> {
     Sha256::digest(data).as_slice().to_vec()
+}
+
+
+/// Computes the RIPEMD-160 hash of the given data.
+pub fn ripemd160_digest(data: &[u8]) -> Vec<u8> {
+    let mut ripemd160 = crypto::ripemd160::Ripemd160::new();
+    ripemd160.input(data);
+    let mut buf: Vec<u8> = repeat(0).take(ripemd160.output_bytes()).collect();
+    ripemd160.result(&mut buf);
+    return buf;
+}
+
+/// Base58 encodes the given data.
+pub fn base58_encode(data: &[u8]) -> String {
+    bs58::encode(data).into_string()
+}
+
+/// Base58 decodes the given string.
+pub fn base58_decode(s: &str) -> Vec<u8> {
+    bs58::decode(s).into_vec().unwrap_or_else(|e| {
+        eprint!("Failed to decode base58 string: {}", e);
+        Vec::new()
+    })
+}
+
+/// Generates a new key pair using the ECDSA P-256 algorithm.
+pub fn generate_key_pair() -> Vec<u8> {
+    let rng = SystemRandom::new();
+    let pkcs8 = EcdsaKeyPair::generate_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, &rng).unwrap();
+    pkcs8.as_ref().to_vec()
+}
+
+/// Sign the given message using ECDSA P256 SHA256
+pub fn ecdsa_p256_sha256_sign(pkcs8: &[u8], message: &[u8]) -> Vec<u8> {
+    let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8).unwrap();
+    let rng = ring::rand::SystemRandom::new();
+    key_pair.sign(&rng, message).unwrap().as_ref().to_vec()
+}
+
+/// Verify the given signature using ECDSA P256 SHA256
+pub fn ecdsa_p256_sha256_sign_verify(public_key: &[u8], signature: &[u8], message: &[u8]) -> bool {
+    let peer_public_key =
+        ring::signature::UnparsedPublicKey::new(&ECDSA_P256_SHA256_FIXED, public_key);
+    let result = peer_public_key.verify(message, signature.as_ref());
+    result.is_ok()
 }
 
 /// Computes the RIPEMD-160 hash of the given data.
@@ -81,67 +106,6 @@ pub fn get_public_key(private_key: &[u8]) -> Vec<u8> {
     let public_key = secp256k1::PublicKey::from_secret_key(&secp, &secret_key);
     public_key.serialize().to_vec()
 }
-
-/// Encodes a byte slice into its base58 representation.
-/// 
-/// # Arguments
-/// 
-/// * `payload` - A byte slice to be encoded.
-/// 
-/// # Returns
-/// 
-/// * A `String` containing the base58 representation of the byte slice.
-// pub fn base58_encode(payload: &[u8]) -> String {
-//     let payload = payload.to_vec();
-//     let mut result = Vec::new();
-//     let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz".as_bytes();
-//     let base = alphabet.len();
-//     let mut leading_zeroes_count = 0;
-//     for b in payload.iter() {
-//         if *b == 0 {
-//             leading_zeroes_count += 1;
-//         } else {
-//             break;
-//         }
-//     }
-//     let mut x = BigUint::from_bytes_be(&payload);
-//     while x > BigUint::from(0 as u8) {
-//         let rem = x.clone() % base;
-//         result.push(alphabet[rem.to_usize().unwrap()]);
-//         x = x / base;
-//     }
-//     for _ in 0..leading_zeroes_count {
-//         result.push(alphabet[0]);
-//     }
-//     result.reverse();
-//     String::from_utf8(result).unwrap()
-// }
-
-// pub fn base58_decode(input: &str) -> Vec<u8> {
-//     let alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-//     let base = BigUint::from(alphabet.len());
-
-//     let mut result = BigUint::zero();
-//     let mut leading_zeroes = 0;
-//     let mut leading_zeroes_handled = false;
-
-//     for &byte in input.as_bytes() {
-//         if byte == b'1' && !leading_zeroes_handled {
-//             leading_zeroes += 1;
-//         } else {
-//             leading_zeroes_handled = true;
-//             let char_index = alphabet.find(byte as char)
-//                 .unwrap_or_else(|| panic!("Invalid character in Base58 string: {}", byte as char));
-//             result = result * &base + BigUint::from(char_index);
-//         }
-//     }
-
-//     let mut result_bytes = result.to_bytes_be();
-//     let mut bytes = vec![0; leading_zeroes];
-//     bytes.append(&mut result_bytes);
-
-//     bytes
-// }
 
 /// signs the given data with the given private key.
 /// 
