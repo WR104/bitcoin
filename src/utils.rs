@@ -2,8 +2,6 @@ extern crate bs58;
 
 use sha2::{Digest as SHA256Digest, Sha256};
 use ripemd::Ripemd160;
-use crypto::digest::Digest;
-use std::iter::repeat;
 use ring::rand::SystemRandom;
 use ring::signature::{EcdsaKeyPair, ECDSA_P256_SHA256_FIXED, ECDSA_P256_SHA256_FIXED_SIGNING};
 
@@ -28,12 +26,11 @@ pub fn compute_sha256(data: &[u8]) -> Vec<u8> {
 
 
 /// Computes the RIPEMD-160 hash of the given data.
-pub fn ripemd160_digest(data: &[u8]) -> Vec<u8> {
-    let mut ripemd160 = crypto::ripemd160::Ripemd160::new();
-    ripemd160.input(data);
-    let mut buf: Vec<u8> = repeat(0).take(ripemd160.output_bytes()).collect();
-    ripemd160.result(&mut buf);
-    return buf;
+pub fn compute_ripemd160(data: &[u8]) -> Vec<u8> {
+    let mut hasher = Ripemd160::new();
+    hasher.update(data);
+    let result = hasher.finalize();
+    result.to_vec()
 }
 
 /// Base58 encodes the given data.
@@ -58,7 +55,8 @@ pub fn generate_key_pair() -> Vec<u8> {
 
 /// Sign the given message using ECDSA P256 SHA256
 pub fn ecdsa_p256_sha256_sign(pkcs8: &[u8], message: &[u8]) -> Vec<u8> {
-    let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8).unwrap();
+    let rng = ring::rand::SystemRandom::new();
+    let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8, &rng).unwrap();
     let rng = ring::rand::SystemRandom::new();
     key_pair.sign(&rng, message).unwrap().as_ref().to_vec()
 }
@@ -71,80 +69,7 @@ pub fn ecdsa_p256_sha256_sign_verify(public_key: &[u8], signature: &[u8], messag
     result.is_ok()
 }
 
-/// Computes the RIPEMD-160 hash of the given data.
-/// 
-/// # Arguments
-/// 
-/// * `data` - A byte slice to be hashed.
-/// 
-/// # Returns
-/// 
-/// * A `Vec<u8>` containing the RIPEMD-160 hash of the data.
-pub fn hash_public_key(public_key: &[u8]) -> Vec<u8> {
-    let mut hasher = Sha256::new();
-    hasher.update(public_key);
-    let public_sha256 = hasher.finalize();
-
-    let mut ripemd160 = Ripemd160::new();
-    ripemd160.update(public_sha256);
-    ripemd160.finalize().to_vec()
-}
-
-/// gets the public key from the given private key.
-/// 
-/// # Arguments
-/// 
-/// * `private_key` - A byte slice containing the private key.
-/// 
-/// # Returns
-/// 
-/// * A `Vec<u8>` containing the public key.
-#[allow(dead_code)]
-pub fn get_public_key(private_key: &[u8]) -> Vec<u8> {
-    let secp = secp256k1::Secp256k1::new();
-    let secret_key = secp256k1::SecretKey::from_slice(private_key).unwrap();
-    let public_key = secp256k1::PublicKey::from_secret_key(&secp, &secret_key);
-    public_key.serialize().to_vec()
-}
-
-/// signs the given data with the given private key.
-/// 
-/// # Arguments
-/// 
-/// * `private_key` - A byte slice containing the private key.
-/// * `data` - A byte slice containing the data to be signed.
-/// 
-/// # Returns
-/// 
-/// * A `Vec<u8>` containing the signature.
-pub fn sign(private_key: &[u8], data: &[u8]) -> Vec<u8> {
-    let secp = secp256k1::Secp256k1::new();
-    let message = secp256k1::Message::from_slice(data).unwrap();
-    let secret_key = secp256k1::SecretKey::from_slice(private_key).unwrap();
-    let sig = secp.sign(&message, &secret_key);
-    sig.serialize_der().to_vec()
-}
-
-
-pub fn validate_address(address: &str) -> bool {
-    // Base58 decode the address
-    let decoded = match bs58::decode(address).into_vec() {
-        Ok(v) => v,
-        Err(_) => return false,
-    };
-
-    // Ensure the length is correct to avoid panicking while slicing
-    if decoded.len() <= 4 {
-        return false;
-    }
-
-    // Split into payload and checksum
-    let (payload, checksum) = decoded.split_at(decoded.len() - 4);
-
-    // Double SHA-256 hash the payload
-    let hash1 = Sha256::digest(payload);
-    let hash2 = Sha256::digest(&hash1);
-
-    // Compare the checksums and return the result
-    checksum == &hash2[0..4]
+pub fn hash_pub_key(pub_key: &[u8]) -> Vec<u8> {
+    let pub_key_sha256 = compute_sha256(pub_key);
+    compute_ripemd160(&pub_key_sha256.as_slice())
 }

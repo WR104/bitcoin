@@ -1,8 +1,10 @@
-use secp256k1::{SecretKey, Secp256k1, rand::rngs::OsRng};
-use serde::{Serialize, Deserialize};
-use sha2::{Digest, Sha256};
+use crate::utils;
 
-use crate::{utils, base58};
+use ring::signature::{EcdsaKeyPair, KeyPair, ECDSA_P256_SHA256_FIXED_SIGNING};
+use serde::{Serialize, Deserialize};
+
+const VERSION: u8 = 0x00;
+pub const CHECKSUM_LENGTH: usize = 4;
 
 #[derive(Serialize, Deserialize)]
 pub struct Wallet {
@@ -12,42 +14,63 @@ pub struct Wallet {
 
 impl Wallet {
     pub fn new() -> Self {
-        let (private_key, public_key) = Self::generate_key_pair();
+        let pkcs8: Vec<u8> = utils::generate_key_pair();
+        let rng = ring::rand::SystemRandom::new();
+        let key_pair = EcdsaKeyPair::from_pkcs8(&ECDSA_P256_SHA256_FIXED_SIGNING, pkcs8.as_ref(), &rng).unwrap();
+        let public_key = key_pair.public_key().as_ref().to_vec();
         Wallet {
-            private_key,
+            private_key: pkcs8,
             public_key,
         }
     }
 
-    fn generate_key_pair() -> (Vec<u8>, Vec<u8>) {
-        let secp = Secp256k1::new();
-        let mut rng = OsRng::new().unwrap();
-        let private_key = SecretKey::new(&mut rng);
-        let public_key = secp256k1::PublicKey::from_secret_key(&secp, &private_key);
-        let private_key = private_key[..].to_vec();
-        let public_key = public_key.serialize().to_vec();
-        (private_key, public_key)   
-    }
-
-    fn checksum(payload: &[u8]) -> Vec<u8> {
-        let mut hasher = Sha256::new();
-        hasher.update(payload);
-        let first_hash = hasher.finalize();
-
-        hasher = Sha256::new();
-        hasher.update(first_hash);
-        let second_hash = hasher.finalize();
-
-        second_hash[..4].to_vec()
-    } 
-
     pub fn address(&self) -> String {
-        let pub_key_hash = utils::hash_public_key(&self.public_key);
-        let versioned_payload = [vec![0x00], pub_key_hash].concat();
-        let checksum = Self::checksum(&versioned_payload);
-        let full_payload = [versioned_payload, checksum].concat();
-        let address = base58::encode(&full_payload);
-        String::from_utf8(address).unwrap()
+        let pub_key_hash = utils::hash_pub_key(self.public_key.as_slice());
+        let mut playload: Vec<u8> = Vec::new();
+        playload.push(VERSION);
+        playload.extend(pub_key_hash.as_slice());
+        let checksum = checksum(playload.as_slice());
+        playload.extend(checksum.as_slice());
+        utils::base58_encode(playload.as_slice())
     }
 
+    pub fn get_public_key(&self) -> Vec<u8> {
+        self.public_key.clone()
+    }
+
+    pub fn get_private_key(&self) -> Vec<u8> {
+        self.private_key.clone()
+    }
 }
+
+/// Computes the checksum of the given payload.
+fn checksum(payload: &[u8]) -> Vec<u8> {
+    let first_sha256 = utils::compute_sha256(payload);
+    let second_sha256 = utils::compute_sha256(&first_sha256);
+    second_sha256[0..CHECKSUM_LENGTH].to_vec()
+}
+
+/// Validates that the given address is valid.
+pub fn validate_address(address: &str) -> bool {
+    let payload = utils::base58_decode(address);
+    let actual_checksum = payload[payload.len() - CHECKSUM_LENGTH..].to_vec();
+    let version = payload[0];
+    let pub_key_hash = payload[1..payload.len() - CHECKSUM_LENGTH].to_vec();
+
+    let mut target_vec = vec![];
+    target_vec.push(version);
+    target_vec.extend(pub_key_hash);
+    let target_checksum = checksum(target_vec.as_slice());
+    actual_checksum.eq(target_checksum.as_slice())
+}
+
+/// Calculates the address of the given public key.
+pub fn calc_address(pub_hash_key: &[u8]) -> String {
+    let mut playload: Vec<u8> = Vec::new();
+    playload.push(VERSION);
+    playload.extend(pub_hash_key);
+    let checksum = checksum(playload.as_slice());
+    playload.extend(checksum.as_slice());
+    utils::base58_encode(playload.as_slice())
+}
+

@@ -2,11 +2,10 @@ use clap::{App, Arg, SubCommand};
 use std::env;
 
 use crate::{
-    base58,
     blockchain::Blockchain,
     transaction::{self},
     utils,
-    wallets::Wallets,
+    wallets::Wallets, wallet,
 };
 
 pub struct CLI;
@@ -95,7 +94,7 @@ impl CLI {
                 let current_dir = std::fs::read_dir(".").expect("Failed to read current directory");
 
                 // Delete all .json files and folders named blockchain.db
-                Self::delete_files_and_folders(current_dir, "json", "blockchain.db");
+                Self::delete_files_and_folders(current_dir, "dat", "blockchain.db");
             }
             _ => {
                 eprintln!("Invalid command. Use --help for usage information.");
@@ -103,27 +102,8 @@ impl CLI {
         }
     }
 
-    pub fn get_balance(&self, address: &str) {
-        if !utils::validate_address(address) {
-            eprintln!("Invalid address");
-            return;
-        }
-
-        let blockchain = Blockchain::new(address);
-        let mut balance = 0;
-        let pub_key_hash = base58::decode(address.as_bytes());
-        let pub_key_hash = &pub_key_hash[1..pub_key_hash.len() - 4];
-        let utxos = blockchain.find_utxo(pub_key_hash.clone().to_vec());
-
-        for out in utxos {
-            balance += out.value;
-        }
-
-        println!("Balance of '{}' is {}", address, balance);
-    }
-
     pub fn create_blockchain(&self, address: &str) {
-        if !utils::validate_address(address) {
+        if !wallet::validate_address(address) {
             eprintln!("Invalid address");
             return;
         }
@@ -136,8 +116,25 @@ impl CLI {
     pub fn create_wallet(&self) {
         let mut wallets = Wallets::new();
         let address = wallets.create_wallet();
-        wallets.save_file().unwrap();
+        wallets.save_to_file();
         println!("Your new address: {}", address);
+    }
+
+    pub fn get_balance(&self, address: &str) {
+        if !wallet::validate_address(address) {
+            eprintln!("Invalid address");
+            return;
+        }
+
+        let blockchain = Blockchain::new(address);
+        let payload = utils::base58_decode(address);
+        let pub_key_hash = payload[1..payload.len() - wallet::CHECKSUM_LENGTH].to_vec();
+        let utxos = blockchain.find_utxo(pub_key_hash);
+        let mut balance = 0;
+        for utxo in utxos {
+            balance += utxo.get_value();
+        }
+        println!("Balance of {}: {}", address, balance);
     }
 
     pub fn list_addresses(&self) {
@@ -148,25 +145,25 @@ impl CLI {
         }
     }
 
-    pub fn print_chain(&self) {
-        let blockchain = Blockchain::new("");
-        blockchain.print_blocks();
-    }
-
     pub fn send(&self, from: &str, to: &str, amount: i32) {
-        if !utils::validate_address(from) {
+        if !wallet::validate_address(from) {
             eprintln!("Invalid address");
             return;
         }
-        if !utils::validate_address(to) {
+        if !wallet::validate_address(to) {
             eprintln!("Invalid address");
             return;
         }
 
         let mut blockchain = Blockchain::new(from);
-        let tx = transaction::new_utxo_transaction(from, to, amount, &blockchain).unwrap();
-        blockchain.mine_block(vec![tx]);
+        let transaction = transaction::new_utxo_transaction(from, to, amount, &blockchain);
+        blockchain.mine_block(vec![transaction]);
         println!("Success!");
+    }
+
+    pub fn print_chain(&self) {
+        let blockchain = Blockchain::new("");
+        blockchain.print_chain();
     }
 
     fn delete_files_and_folders(directory: std::fs::ReadDir, file_ext: &str, folder_name: &str) {

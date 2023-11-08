@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-use std::error::Error;
-use std::path::Path;
-
 use crate::wallet::Wallet;
 
-const PATH: &str = "wallet.json";
+use std::collections::HashMap;
+use std::env::current_dir;
+use std::fs::{File, OpenOptions};
+use std::io::{BufWriter, Read, Write};
+
+pub const WALLET_FILE: &str = "wallets.dat";
 
 pub struct Wallets {
     wallets: HashMap<String, Wallet>,
@@ -15,7 +16,7 @@ impl Wallets{
         let mut wallets = Wallets {
             wallets: HashMap::new(),
         };
-        wallets.load_file().unwrap();
+        wallets.load_from_file();
         wallets
     }
 
@@ -38,18 +39,29 @@ impl Wallets{
         self.wallets.get(address)
     }
 
-    fn load_file(&mut self) -> Result<(), Box<dyn Error>> {
-        let path = Path::new(PATH);
-        if path.exists() {
-            let contents = std::fs::read_to_string(path)?;
-            self.wallets = serde_json::from_str(&contents)?;
+    pub fn load_from_file(&mut self) {
+        let path = current_dir().unwrap().join(WALLET_FILE);
+        if !path.exists() {
+            return;
         }
-        Ok(())
+        let mut file = File::open(path).unwrap();
+        let metadata = file.metadata().expect("Unable to read metadata");
+        let mut buffer = vec![0; metadata.len() as usize];
+        let _ = file.read(&mut buffer).expect("buffer overflow");
+        let wallets = bincode::deserialize(&buffer[..]).expect("Unable to deserialize file data");
+        self.wallets = wallets;
     }
 
-    pub fn save_file(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let contents = serde_json::to_string(&self.wallets)?;
-        std::fs::write(PATH, contents)?;
-        Ok(())
+    pub fn save_to_file(&self) {
+        let path = current_dir().unwrap().join(WALLET_FILE);
+        let file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .open(&path)
+            .expect("Unable to open wallet.data");
+        let mut writer = BufWriter::new(&file);
+        let wallets_bytes = bincode::serialize(&self.wallets).expect("Unable to serialize wallets");
+        writer.write(wallets_bytes.as_slice()).expect("Unable to write wallets to file");
+        let _ = writer.flush();
     }
 }

@@ -1,5 +1,4 @@
 mod utils;
-mod base58;
 
 mod block;
 mod blockchain;

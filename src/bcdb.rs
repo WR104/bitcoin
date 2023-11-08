@@ -31,11 +31,6 @@ impl BlockchainDb {
         let read_options = ReadOptions::new();
         self.database.get(read_options, from_u8(key)).map_err(Into::into)
     }
-
-    pub fn get_last_hash(&self) -> Result<Option<Vec<u8>>> {
-        self.read(b"1")
-    }
-
 }
 
 /// Converts the last 4 bytes (or fewer) of a byte slice into an `i32` using little-endian order.
