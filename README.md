@@ -13,6 +13,4 @@ cargo run printchain
 cargo run send <FROM> <TO> <AMOUNT>
 ```
 
-This project is based on the [blockchain_go](https://github.com/Jeiwan/blockchain_go) repository.
-
-🚧 Need to work on blockchain.rs line 227.
+Rust implmentation of the [blockchain_go](https://github.com/Jeiwan/blockchain_go).
