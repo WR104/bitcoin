@@ -1,12 +1,12 @@
-use clap::{App, Arg, SubCommand};
-use std::env;
-
 use crate::{
     blockchain::Blockchain,
     transaction::{self},
     utils,
     wallets::Wallets, wallet,
 };
+
+use clap::{App, Arg, SubCommand};
+use std::env;
 
 pub struct CLI;
 

@@ -1,8 +1,6 @@
-use crate::{utils, wallets::Wallets, wallet};
+use crate::{utils, wallets::Wallets, wallet, blockchain::Blockchain};
 use serde::{Deserialize, Serialize};
 use data_encoding::HEXLOWER;
-
-use crate::blockchain::Blockchain;
 
 // mining reward
 pub const SUBSIDY: i32 = 10;
@@ -77,7 +75,6 @@ impl TXOutput {
     
 }
 
-#[allow(dead_code)]
 impl Transaction {
     fn hash(&mut self) -> Vec<u8>{
         let tx_copy = Transaction {

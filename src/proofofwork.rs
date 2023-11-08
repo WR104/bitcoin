@@ -30,10 +30,6 @@ impl<'a> ProofOfWork<'a> {
     }
 
     /// Calculates the proof of work, returning the correct nonce and hash.
-    ///
-    /// # Returns
-    ///
-    /// * A tuple containing the correct nonce and the resulting hash as a `Vec<u8>`.
     pub fn run(&self) -> (u32, Vec<u8>) {
         let mut hasher = Sha256::new();
 

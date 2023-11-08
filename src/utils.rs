@@ -10,15 +10,6 @@ pub fn hex_string(bytes: &[u8]) -> String {
     hex::encode(bytes)
 }
 
-/// Decodes a hexadecimal string into its byte representation.
-#[allow(dead_code)]
-pub fn string_hex(s: &str) -> Vec<u8> {
-    hex::decode(s).unwrap_or_else(|e| {
-        eprint!("Failed to decode hex string: {}", e);
-        Vec::new()
-    })
-}
-
 /// Computes the SHA-256 hash of the given data.
 pub fn compute_sha256(data: &[u8]) -> Vec<u8> {
     Sha256::digest(data).as_slice().to_vec()

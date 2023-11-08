@@ -1,5 +1,4 @@
 mod utils;
-
 mod block;
 mod blockchain;
 mod proofofwork;
