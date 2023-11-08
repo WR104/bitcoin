@@ -1,8 +1,8 @@
 /target
-.exe
-.pdb
-.dat
-.json
+*.exe
+*.pdb
+wallets.dat
+wallet.dat
 wallet.json
 wallets.json
 /blockchain.db
