@@ -62,5 +62,5 @@ pub fn ecdsa_p256_sha256_sign_verify(public_key: &[u8], signature: &[u8], messag
 
 pub fn hash_pub_key(pub_key: &[u8]) -> Vec<u8> {
     let pub_key_sha256 = compute_sha256(pub_key);
-    compute_ripemd160(&pub_key_sha256.as_slice())
+    compute_ripemd160(&pub_key_sha256)
 }

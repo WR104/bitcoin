@@ -40,7 +40,7 @@ impl TXInput {
     }
 
     pub fn uses_key(&self, pub_key_hash: &[u8]) -> bool {
-        let locking_hash = utils::hash_pub_key(&self.pub_key.as_slice());
+        let locking_hash = utils::hash_pub_key(&self.pub_key);
         locking_hash.eq(pub_key_hash)
     }
 }
@@ -83,7 +83,7 @@ impl Transaction {
             vout: self.vout.clone(),
         };
         let data = bincode::serialize(&tx_copy).unwrap();
-        utils::compute_sha256(data.as_slice())
+        utils::compute_sha256(&data)
     }
 
     /// Determines if the transaction is a coinbase transaction.
@@ -131,7 +131,7 @@ impl Transaction {
 
         for (id, vin) in self.vin.iter_mut().enumerate() {
             // find the previous transaction
-            let prev_tx_option = blockchain.find_transaction(&vin.get_txid().as_slice());
+            let prev_tx_option = blockchain.find_transaction(&vin.get_txid());
             if prev_tx_option.is_none() {
                 panic!("ERROR: Previous transaction is not correct");
             }
@@ -144,7 +144,7 @@ impl Transaction {
 
             // Sign the transaction using the private key
             let tx_bytes = bincode::serialize(&tx_copy).expect("ERROR: Failed to serialize transaction");
-            let signature = utils::ecdsa_p256_sha256_sign(&private_key.as_slice(), tx_bytes.as_slice());
+            let signature = utils::ecdsa_p256_sha256_sign(&private_key, &tx_bytes);
             vin.signature = signature
         }
     }
@@ -158,7 +158,7 @@ impl Transaction {
         let mut tx_copy = self.trimmed_copy();
         
         for (idx, vin) in  self.vin.iter().enumerate() {
-            let prev_tx_option = blockchain.find_transaction(&vin.get_txid().as_slice());
+            let prev_tx_option = blockchain.find_transaction(&vin.get_txid());
             if prev_tx_option.is_none() {
                 panic!("ERROR: Previous transaction is not correct");
             }
@@ -171,9 +171,9 @@ impl Transaction {
             // Verify the transaction using the public key
             let tx_bytes = bincode::serialize(&tx_copy).expect("ERROR: Failed to serialize transaction");
             let verify = utils::ecdsa_p256_sha256_sign_verify(
-                &vin.pub_key.as_slice(), 
-                &vin.signature.as_slice(),
-                 tx_bytes.as_slice()
+                &vin.pub_key, 
+                &vin.signature,
+                &tx_bytes
             );
             if !verify {
                 return false;
@@ -209,11 +209,11 @@ pub fn new_utxo_transaction(
     let wallet = binding
         .get_wallet(from)
         .expect("ERROR: Wallet not found");
-    let public_key_hash = utils::hash_pub_key(wallet.get_public_key().as_slice());
+    let public_key_hash = utils::hash_pub_key(&wallet.get_public_key());
 
     //2. find unspent outputs
     let (accumlated, valid_outputs) =
-        blockchain.find_spendable_outputs(public_key_hash.as_slice(), amount);
+        blockchain.find_spendable_outputs(&public_key_hash, amount);
     if accumlated < amount {
         panic!("ERROR: Not enough funds");
     }

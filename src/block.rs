@@ -1,4 +1,5 @@
 use crate::{proofofwork::ProofOfWork, transaction::Transaction, utils};
+
 use bincode;
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};

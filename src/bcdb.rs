@@ -34,24 +34,6 @@ impl BlockchainDb {
 }
 
 /// Converts the last 4 bytes (or fewer) of a byte slice into an `i32` using little-endian order.
-///
-/// If the provided byte slice is longer than 4 bytes, only the last 4 bytes are considered.
-/// If it's shorter than 4 bytes, the result is padded with zeros at the higher-order bytes.
-///
-/// # Arguments
-///
-/// * `key` - A byte slice that represents the key.
-///
-/// # Returns
-///
-/// * An `i32` value constructed from the last 4 bytes (or fewer) of the byte slice.
-///
-/// # Examples
-///
-/// ```
-/// let key = &[1, 2, 3, 4, 5];
-/// let result = from_u8(key);
-/// assert_eq!(result, 67305985); // This is the i32 representation of [2, 3, 4, 5] in little-endian order.
 fn from_u8(key: &[u8]) -> i32 {
     let mut buffer = [0u8; 4];
     let key_end = key.len().min(4);

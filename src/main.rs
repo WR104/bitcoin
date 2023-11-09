@@ -8,7 +8,6 @@ mod transaction;
 mod wallet;
 mod wallets;
 
-
 use cli::CLI;
 
 fn main() {

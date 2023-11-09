@@ -61,7 +61,7 @@ impl Wallets{
             .expect("Unable to open wallet.data");
         let mut writer = BufWriter::new(&file);
         let wallets_bytes = bincode::serialize(&self.wallets).expect("Unable to serialize wallets");
-        writer.write(wallets_bytes.as_slice()).expect("Unable to write wallets to file");
+        writer.write(&wallets_bytes).expect("Unable to write wallets to file");
         let _ = writer.flush();
     }
 }

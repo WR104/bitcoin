@@ -25,13 +25,13 @@ impl Wallet {
     }
 
     pub fn address(&self) -> String {
-        let pub_key_hash = utils::hash_pub_key(self.public_key.as_slice());
+        let pub_key_hash = utils::hash_pub_key(&self.public_key);
         let mut playload: Vec<u8> = Vec::new();
         playload.push(VERSION);
-        playload.extend(pub_key_hash.as_slice());
-        let checksum = checksum(playload.as_slice());
-        playload.extend(checksum.as_slice());
-        utils::base58_encode(playload.as_slice())
+        playload.extend(&pub_key_hash);
+        let checksum = checksum(&playload);
+        playload.extend(&checksum);
+        utils::base58_encode(&playload)
     }
 
     pub fn get_public_key(&self) -> Vec<u8> {
@@ -60,8 +60,8 @@ pub fn validate_address(address: &str) -> bool {
     let mut target_vec = vec![];
     target_vec.push(version);
     target_vec.extend(pub_key_hash);
-    let target_checksum = checksum(target_vec.as_slice());
-    actual_checksum.eq(target_checksum.as_slice())
+    let target_checksum = checksum(&target_vec);
+    actual_checksum.eq(&target_checksum)
 }
 
 /// Calculates the address of the given public key.
@@ -69,8 +69,8 @@ pub fn calc_address(pub_hash_key: &[u8]) -> String {
     let mut playload: Vec<u8> = Vec::new();
     playload.push(VERSION);
     playload.extend(pub_hash_key);
-    let checksum = checksum(playload.as_slice());
-    playload.extend(checksum.as_slice());
-    utils::base58_encode(playload.as_slice())
+    let checksum = checksum(&playload);
+    playload.extend(&checksum);
+    utils::base58_encode(&playload)
 }
 

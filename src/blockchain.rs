@@ -74,7 +74,7 @@ impl Blockchain {
         let mut unspent_outputs: HashMap<String, Vec<usize>> = HashMap::new();
 
         'outer: for tx in &unspent_transaction {
-            let txid_hex = HEXLOWER.encode(tx.get_id().as_slice());
+            let txid_hex = HEXLOWER.encode(&tx.get_id());
             for idx in 0..tx.get_vout().len() {
                 let txout = tx.get_vout()[idx].clone();
                 if txout.is_locked_with_key(pub_key_hash) {
@@ -116,7 +116,7 @@ impl Blockchain {
             }
 
             for tx in block.unwrap().get_transactions() {
-                let txid_hex = HEXLOWER.encode(tx.get_id().as_slice());
+                let txid_hex = HEXLOWER.encode(&tx.get_id());
                 let txout = tx.get_vout();
                 'outer: for idx in 0..txout.len() {
                     let txout = txout[idx].clone();
@@ -141,7 +141,7 @@ impl Blockchain {
 
                 for txin in tx.get_vin() {
                     if txin.uses_key(pub_key_hash) {
-                        let txid_hex = HEXLOWER.encode(&txin.get_txid().as_slice());
+                        let txid_hex = HEXLOWER.encode(&txin.get_txid());
                         if spent_txos.contains_key(txid_hex.as_str()) {
                             let outs = spent_txos.get_mut(txid_hex.as_str()).unwrap();
                             outs.push(txin.get_vout());
@@ -184,7 +184,7 @@ impl Blockchain {
             }
             let block = option.unwrap();
             for transaction in &block.get_transactions() {
-                if txid.eq(transaction.get_id().as_slice()) {
+                if txid.eq(&transaction.get_id()) {
                     return Some(transaction.clone());
                 }
             }
